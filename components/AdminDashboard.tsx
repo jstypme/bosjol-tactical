@@ -1562,4 +1562,733 @@ const RaffleManagerModal: React.FC<{raffle: Raffle, players: Player[], onClose: 
                     <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700">
                         <h4 className="font-bold text-red-400 mb-3">Ticket Seller</h4>
                         <div className="flex flex-col sm:flex-row gap-2">
-                            <select value={selectedPlayer} onChange={e => setSelectedPlayer(e.target.value)} className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-
+                            <select value={selectedPlayer} onChange={e => setSelectedPlayer(e.target.value)} className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                                <option value="">Select a player...</option>
+                                {players.map(p => <option key={p.id} value={p.id}>{p.name} ({p.callsign})</option>)}
+                            </select>
+                            <Button onClick={() => handleSellTicket('Paid (Cash)')} disabled={!selectedPlayer} className="flex-shrink-0">Paid Cash</Button>
+                            <Button onClick={() => handleSellTicket('Paid (Card)')} disabled={!selectedPlayer} className="flex-shrink-0">Paid Card</Button>
+                        </div>
+                    </div>
+                )}
+                
+                 <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700">
+                     <h4 className="font-bold text-red-400 mb-3">Sold Tickets ({raffle.tickets.length})</h4>
+                     <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {raffle.tickets.map(ticket => {
+                            const player = players.find(p => p.id === ticket.playerId);
+                            return (
+                                <div key={ticket.id} className="grid grid-cols-3 items-center bg-zinc-900/50 p-2 rounded-md text-sm">
+                                    <span className="font-mono text-red-300">{ticket.code}</span>
+                                    <span className="text-gray-200">{player?.name || 'Unknown Player'}</span>
+                                    <BadgePill color={ticket.paymentStatus.startsWith('Paid') ? 'green' : 'red'} className="justify-self-end">{ticket.paymentStatus}</BadgePill>
+                                </div>
+                            )
+                        })}
+                     </div>
+                </div>
+
+                {raffle.status === 'Completed' && (
+                    <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700">
+                         <h4 className="font-bold text-amber-400 mb-3 text-center text-lg">Raffle Winners</h4>
+                         <div className="space-y-2">
+                             {raffle.prizes.sort((a, b) => a.place - b.place).map(prize => {
+                                const winner = raffle.winners.find(w => w.prizeId === prize.id);
+                                const winnerPlayer = winner ? players.find(p => p.id === winner.playerId) : null;
+                                return (
+                                    <div key={prize.id} className="flex justify-between items-center text-sm bg-zinc-900/50 p-2 rounded-md">
+                                        <p className="font-semibold text-amber-300">{prize.place}. {prize.name}</p>
+                                        <p className="text-gray-200 font-bold text-base">{winnerPlayer ? winnerPlayer.name : 'Not Drawn'}</p>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )}
+            </div>
+             {raffle.status !== 'Completed' && (
+                <div className="mt-6">
+                    <Button variant="danger" className="w-full" onClick={handleDrawWinners} disabled={raffle.tickets.length === 0}>
+                       Run Raffle & Draw Winners
+                    </Button>
+                </div>
+            )}
+        </Modal>
+    )
+}
+
+const SponsorsTab: React.FC<Pick<AdminDashboardProps, 'sponsors' | 'setSponsors'>> = ({ sponsors, setSponsors }) => {
+    const [isEditing, setIsEditing] = useState<Sponsor | {} | null>(null);
+
+    const handleSave = (sponsorData: Sponsor) => {
+        if ('id' in sponsorData && sponsorData.id) {
+            setSponsors(ss => ss.map(s => s.id === sponsorData.id ? sponsorData : s));
+        } else {
+            setSponsors(ss => [...ss, { ...sponsorData, id: `s${Date.now()}` }]);
+        }
+        setIsEditing(null);
+    };
+
+     const handleDelete = (id: string) => {
+        if(confirm('Are you sure you want to delete this sponsor?')) {
+            setSponsors(ss => ss.filter(s => s.id !== id));
+        }
+    };
+
+    const SponsorEditorModal: React.FC<{sponsor: Sponsor | {}, onClose: () => void, onSave: (s: Sponsor) => void}> = ({sponsor, onClose, onSave}) => {
+        const [formData, setFormData] = useState({
+            name: 'name' in sponsor ? sponsor.name : '',
+            email: 'email' in sponsor ? sponsor.email : '',
+            phone: 'phone' in sponsor ? sponsor.phone : '',
+            website: 'website' in sponsor ? sponsor.website : '',
+        });
+        const [logo, setLogo] = useState('logoUrl' in sponsor ? sponsor.logoUrl : '');
+
+        const handleSaveClick = () => {
+            const finalSponsor = Object.assign({}, sponsor, { ...formData, logoUrl: logo }) as Sponsor;
+            onSave(finalSponsor);
+        }
+
+        return (
+            <Modal isOpen={true} onClose={onClose} title={'id' in sponsor ? 'Edit Sponsor' : 'Add Sponsor'}>
+                <div className="space-y-4">
+                    <Input label="Sponsor Name" value={formData.name} onChange={e => setFormData(f => ({...f, name: e.target.value}))}/>
+                    <Input label="Website" value={formData.website} onChange={e => setFormData(f => ({...f, website: e.target.value}))} placeholder="https://..."/>
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input label="Email" type="email" value={formData.email} onChange={e => setFormData(f => ({...f, email: e.target.value}))}/>
+                        <Input label="Phone" type="tel" value={formData.phone} onChange={e => setFormData(f => ({...f, phone: e.target.value}))}/>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1.5">Sponsor Logo</label>
+                        <ImageUpload onUpload={setLogo} accept="image/*" />
+                        {logo && <img src={logo} alt="Logo Preview" className="h-16 mt-2 rounded-md bg-white p-1"/>}
+                    </div>
+                </div>
+                 <div className="mt-6">
+                    <Button className="w-full" onClick={handleSaveClick}>Save Sponsor</Button>
+                </div>
+            </Modal>
+        )
+    };
+    
+    return (
+        <div>
+            {isEditing && <SponsorEditorModal sponsor={isEditing} onClose={() => setIsEditing(null)} onSave={handleSave} />}
+            <DashboardCard title="Manage Sponsors" icon={<SparklesIcon className="w-6 h-6"/>}>
+                 <div className="p-4">
+                    <div className="flex justify-end mb-4">
+                        <Button onClick={() => setIsEditing({})}>
+                            <PlusIcon className="w-5 h-5 mr-2" />
+                            Add Sponsor
+                        </Button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {sponsors.map(s => (
+                            <div key={s.id} className="bg-zinc-800/50 p-4 rounded-lg">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex items-start gap-4">
+                                        <img src={s.logoUrl} alt={s.name} className="h-16 rounded-md bg-white p-1" />
+                                        <div>
+                                            <h4 className="font-bold text-lg text-white">{s.name}</h4>
+                                            {s.website && <a href={s.website} target="_blank" rel="noopener noreferrer" className="text-sm text-red-400 hover:underline flex items-center gap-1.5"><GlobeAltIcon className="w-4 h-4"/> Website</a>}
+                                            {s.email && <p className="text-sm text-gray-300 flex items-center gap-1.5"><AtSymbolIcon className="w-4 h-4"/> {s.email}</p>}
+                                            {s.phone && <p className="text-sm text-gray-300 flex items-center gap-1.5"><PhoneIcon className="w-4 h-4"/> {s.phone}</p>}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-2 flex-shrink-0">
+                                        <Button size="sm" variant="secondary" onClick={() => setIsEditing(s)}><PencilIcon className="w-4 h-4"/></Button>
+                                        <Button size="sm" variant="danger" onClick={() => handleDelete(s.id)}><TrashIcon className="w-4 h-4"/></Button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </DashboardCard>
+        </div>
+    )
+}
+
+const InventoryTab: React.FC<Pick<AdminDashboardProps, 'inventory' | 'setInventory' | 'suppliers'>> = ({ inventory, setInventory, suppliers }) => {
+    const [isEditing, setIsEditing] = useState<InventoryItem | {} | null>(null);
+    const [deletingItem, setDeletingItem] = useState<InventoryItem | null>(null);
+    const [activeView, setActiveView] = useState<'rental' | 'retail'>('rental');
+
+    const handleSave = (itemData: InventoryItem) => {
+        if ('id' in itemData && itemData.id) {
+            setInventory(inv => inv.map(i => i.id === itemData.id ? itemData : i));
+        } else {
+            setInventory(inv => [...inv, { ...itemData, id: `inv${Date.now()}` }]);
+        }
+        setIsEditing(null);
+    };
+
+    const handleDelete = () => {
+        if (!deletingItem) return;
+        setInventory(inv => inv.filter(i => i.id !== deletingItem.id));
+        setDeletingItem(null);
+    };
+
+    const displayedInventory = inventory.filter(item => 
+        activeView === 'rental' ? item.isRental : !item.isRental
+    );
+    
+    const conditionColors: Record<InventoryItem['condition'], 'green' | 'amber' | 'red'> = {
+        'New': 'green',
+        'Used': 'amber',
+        'Needs Repair': 'red'
+    };
+
+    const InventoryEditorModal: React.FC<{ item: InventoryItem | {}, onClose: () => void, onSave: (i: InventoryItem) => void }> = ({ item, onClose, onSave }) => {
+        const [formData, setFormData] = useState({
+            name: 'name' in item ? item.name : '',
+            description: 'description' in item ? item.description : '',
+            salePrice: 'salePrice' in item ? item.salePrice : 0,
+            stock: 'stock' in item ? item.stock : 0,
+            isRental: 'isRental' in item ? item.isRental : false,
+            category: 'category' in item ? item.category : INVENTORY_CATEGORIES[0],
+            condition: 'condition' in item ? item.condition : INVENTORY_CONDITIONS[0],
+            purchasePrice: 'purchasePrice' in item ? item.purchasePrice : 0,
+            reorderLevel: 'reorderLevel' in item ? item.reorderLevel : 0,
+            supplierId: 'supplierId' in item ? item.supplierId : '',
+        });
+
+        const handleSaveClick = () => {
+            const finalItem = {
+                ...item,
+                ...formData,
+                type: 'type' in item ? item.type : 'Other'
+            } as InventoryItem;
+            onSave(finalItem);
+        };
+
+        return (
+            <Modal isOpen={true} onClose={onClose} title={'id' in item ? 'Edit Item' : 'Add Item'}>
+                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+                    <Input label="Item Name" value={formData.name} onChange={e => setFormData(f => ({...f, name: e.target.value}))}/>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1.5">Description</label>
+                        <textarea value={formData.description} onChange={e => setFormData(f => ({...f, description: e.target.value}))} rows={2} className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-red-500" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1.5">Category</label>
+                            <select value={formData.category} onChange={e => setFormData(f => ({...f, category: e.target.value as InventoryItem['category']}))} className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                                {INVENTORY_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                            </select>
+                        </div>
+                         <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1.5">Condition</label>
+                            <select value={formData.condition} onChange={e => setFormData(f => ({...f, condition: e.target.value as InventoryItem['condition']}))} className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                                {INVENTORY_CONDITIONS.map(con => <option key={con} value={con}>{con}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <Input label="Stock" type="number" value={formData.stock} onChange={e => setFormData(f => ({...f, stock: Number(e.target.value)}))} />
+                        <Input label="Re-order Level" type="number" value={formData.reorderLevel} onChange={e => setFormData(f => ({...f, reorderLevel: Number(e.target.value)}))} tooltip="A notification will be shown when stock falls to this level."/>
+                    </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <Input label="Sale / Rental Price (R)" type="number" value={formData.salePrice} onChange={e => setFormData(f => ({...f, salePrice: Number(e.target.value)}))} />
+                        <Input label="Purchase Price (R)" type="number" value={formData.purchasePrice} onChange={e => setFormData(f => ({...f, purchasePrice: Number(e.target.value)}))} tooltip="The cost per unit to acquire this item." />
+                    </div>
+                     <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1.5">Supplier</label>
+                        <select value={formData.supplierId} onChange={e => setFormData(f => ({...f, supplierId: e.target.value}))} className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                            <option value="">None</option>
+                            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                    </div>
+                    <label className="flex items-center space-x-3 text-sm text-gray-300">
+                        <input
+                            type="checkbox"
+                            checked={formData.isRental}
+                            onChange={e => setFormData(f => ({...f, isRental: e.target.checked}))}
+                            className="h-4 w-4 rounded border-gray-600 bg-zinc-700 text-red-500 focus:ring-red-500"
+                        />
+                        <span>Is this item available for rent?</span>
+                    </label>
+                </div>
+                <div className="mt-6">
+                    <Button className="w-full" onClick={handleSaveClick}>Save Item</Button>
+                </div>
+            </Modal>
+        )
+    }
+
+    return (
+        <div>
+            {isEditing && <InventoryEditorModal item={isEditing} onClose={() => setIsEditing(null)} onSave={handleSave} />}
+            {deletingItem && (
+                 <Modal isOpen={true} onClose={() => setDeletingItem(null)} title="Confirm Deletion">
+                    <p className="text-gray-300">Are you sure you want to delete the item "{deletingItem.name}"? This will not affect past financial records but cannot be undone.</p>
+                    <div className="flex justify-end gap-4 mt-6">
+                        <Button variant="secondary" onClick={() => setDeletingItem(null)}>Cancel</Button>
+                        <Button variant="danger" onClick={handleDelete}>Delete</Button>
+                    </div>
+                </Modal>
+            )}
+            <DashboardCard title="Manage Inventory" icon={<ArchiveBoxIcon className="w-6 h-6"/>}>
+                <div className="p-4">
+                    <div className="flex justify-between mb-4">
+                         <div className="flex space-x-1 p-1 bg-zinc-900/80 rounded-lg border border-zinc-700">
+                            <Button size="sm" variant={activeView === 'rental' ? 'primary' : 'secondary'} onClick={() => setActiveView('rental')}>Rental Gear</Button>
+                            <Button size="sm" variant={activeView === 'retail' ? 'primary' : 'secondary'} onClick={() => setActiveView('retail')}>Retail Items</Button>
+                        </div>
+                        <Button onClick={() => setIsEditing({isRental: activeView === 'rental'})}>
+                            <PlusIcon className="w-5 h-5 mr-2" />
+                            Add Item
+                        </Button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[70vh] overflow-y-auto">
+                        {displayedInventory.map(item => (
+                            <div key={item.id} className="bg-zinc-800/50 p-3 rounded-lg border border-zinc-700/50 flex flex-col justify-between">
+                                <div>
+                                    <div className="flex justify-between items-start">
+                                        <h4 className="font-bold text-white text-base flex-grow pr-2">{item.name}</h4>
+                                        <div className="flex-shrink-0">
+                                            <p className="font-mono text-xl font-bold text-green-400">R{item.salePrice.toFixed(2)}</p>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mb-2">{item.description}</p>
+                                    <div className="flex flex-wrap items-center gap-1.5 text-xs mb-2">
+                                        <BadgePill color="blue">{item.category}</BadgePill>
+                                        <BadgePill color={conditionColors[item.condition]}>{item.condition}</BadgePill>
+                                    </div>
+                                </div>
+                                <div className="mt-2 pt-2 border-t border-zinc-700/50 flex items-center justify-between">
+                                    <div className="text-left">
+                                        <p className="font-mono text-lg font-bold text-amber-300">{item.stock} <span className="text-xs text-gray-400">in stock</span></p>
+                                        {item.reorderLevel && item.stock <= item.reorderLevel && <p className="text-xs font-bold text-red-500">Low Stock!</p>}
+                                    </div>
+                                    <div className="flex justify-center gap-2">
+                                        <Button size="sm" variant="secondary" className="!p-2" onClick={() => setIsEditing(item)}><PencilIcon className="w-4 h-4" /></Button>
+                                        <Button size="sm" variant="danger" className="!p-2" onClick={() => setDeletingItem(item)}><TrashIcon className="w-4 h-4" /></Button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </DashboardCard>
+        </div>
+    )
+}
+
+const GamificationTab: React.FC<Pick<AdminDashboardProps, 'gamificationSettings' | 'setGamificationSettings'>> = ({ gamificationSettings, setGamificationSettings }) => {
+    // FIX: Initialize state with `gamificationSettings || []` to prevent a crash if the prop is undefined, which can happen with async data. This also helps TypeScript infer the correct array type, fixing the '.map' error.
+    const [settings, setSettings] = useState<GamificationRule[]>(gamificationSettings || []);
+
+    const handleSave = () => {
+        setGamificationSettings(settings);
+        alert('Gamification settings saved!');
+    };
+
+    const handleChange = (id: string, value: string) => {
+        const numValue = parseInt(value, 10);
+        setSettings(s => s.map(rule => rule.id === id ? {...rule, xp: isNaN(numValue) ? 0 : numValue} : rule));
+    }
+    
+    return (
+        <DashboardCard title="Gamification Settings" icon={<TrophyIcon className="w-6 h-6" />} titleAddon={<InfoTooltip text="Configure the global XP values for various in-game actions. These can be temporarily overridden on a per-event basis." />}>
+            <div className="p-6 space-y-4">
+                {settings.map(rule => (
+                    <div key={rule.id} className="grid grid-cols-3 items-center gap-4">
+                         <div className="col-span-2">
+                            <p className="font-semibold text-white">{rule.name}</p>
+                            <p className="text-sm text-gray-400">{rule.description}</p>
+                        </div>
+                        <Input type="number" value={rule.xp} onChange={e => handleChange(rule.id, e.target.value)} />
+                    </div>
+                ))}
+            </div>
+            <div className="p-4 border-t border-zinc-800">
+                <Button onClick={handleSave} className="w-full">Save Settings</Button>
+            </div>
+        </DashboardCard>
+    )
+}
+
+const ProgressionTab: React.FC<Pick<AdminDashboardProps, 'ranks' | 'setRanks' | 'badges' | 'setBadges' | 'gamificationSettings' | 'setGamificationSettings' | 'legendaryBadges' | 'setLegendaryBadges' | 'setPlayers'>> = (props) => {
+    const [editingBadge, setEditingBadge] = useState<Badge | {} | null>(null);
+
+    const handleSaveBadge = (badgeData: Badge) => {
+        if ('id' in badgeData && badgeData.id) {
+            props.setBadges(bs => bs.map(b => b.id === badgeData.id ? badgeData : b));
+        } else {
+            props.setBadges(bs => [...bs, { ...badgeData, id: `b${Date.now()}` }]);
+        }
+        setEditingBadge(null);
+    };
+
+     const handleDeleteBadge = (id: string) => {
+        if(confirm('Are you sure you want to delete this badge? Players who earned it will keep it, but it cannot be earned again.')) {
+            props.setBadges(bs => bs.filter(b => b.id !== id));
+        }
+    };
+    
+    return (
+        <div className="space-y-6">
+            {editingBadge && <BadgeEditorModal badge={editingBadge} onClose={() => setEditingBadge(null)} onSave={handleSaveBadge} />}
+            <RanksTab ranks={props.ranks} setRanks={props.setRanks} badges={props.badges} setEditingBadge={setEditingBadge} />
+            <BadgesTab badges={props.badges} setEditingBadge={setEditingBadge} onDeleteBadge={handleDeleteBadge} />
+            <LegendaryBadgesTab legendaryBadges={props.legendaryBadges} setLegendaryBadges={props.setLegendaryBadges} setPlayers={props.setPlayers} />
+            <GamificationTab gamificationSettings={props.gamificationSettings} setGamificationSettings={props.setGamificationSettings} />
+        </div>
+    );
+};
+
+const SettingsTab: React.FC<Pick<AdminDashboardProps, 'companyDetails' | 'setCompanyDetails' | 'onDeleteAllData'>> = ({ companyDetails, setCompanyDetails, onDeleteAllData }) => {
+    const [details, setDetails] = useState(companyDetails);
+
+    const handleSave = () => {
+        setCompanyDetails(details);
+        alert('Company details updated.');
+    };
+
+    const handleSocialChange = (index: number, field: keyof SocialLink, value: string) => {
+        const newLinks = [...details.socialLinks];
+        newLinks[index] = { ...newLinks[index], [field]: value };
+        setDetails(d => ({...d, socialLinks: newLinks}));
+    };
+
+    const handleAddSocial = () => {
+        const newLink: SocialLink = { id: `sl${Date.now()}`, name: '', url: '', iconUrl: '' };
+        setDetails(d => ({...d, socialLinks: [...d.socialLinks, newLink]}));
+    }
+
+    const handleRemoveSocial = (index: number) => {
+        setDetails(d => ({...d, socialLinks: d.socialLinks.filter((_, i) => i !== index)}));
+    }
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+             <div className="lg:col-span-2 space-y-6">
+                 <DashboardCard title="Company Details" icon={<BuildingOfficeIcon className="w-6 h-6"/>}>
+                     <div className="p-6 space-y-4">
+                        <Input label="Company Name" value={details.name} onChange={e => setDetails(d => ({...d, name: e.target.value}))} />
+                        <Input label="Website" value={details.website} onChange={e => setDetails(d => ({...d, website: e.target.value}))} />
+                        <div className="grid grid-cols-2 gap-4">
+                            <Input label="Email" type="email" value={details.email} onChange={e => setDetails(d => ({...d, email: e.target.value}))} />
+                            <Input label="Phone" type="tel" value={details.phone} onChange={e => setDetails(d => ({...d, phone: e.target.value}))} />
+                        </div>
+                        <Input label="Address" value={details.address} onChange={e => setDetails(d => ({...d, address: e.target.value}))} />
+                         <div className="grid grid-cols-2 gap-4">
+                            <Input label="Registration Number" value={details.regNumber || ''} onChange={e => setDetails(d => ({...d, regNumber: e.target.value}))} />
+                            <Input label="VAT Number" value={details.vatNumber || ''} onChange={e => setDetails(d => ({...d, vatNumber: e.target.value}))} />
+                        </div>
+                         <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1.5">Fixed Event Rules</label>
+                            <textarea value={details.fixedEventRules} onChange={e => setDetails(d => ({...d, fixedEventRules: e.target.value}))} rows={5} className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="These rules will be pre-filled for every new event."/>
+                        </div>
+                     </div>
+                      <div className="p-4 border-t border-zinc-800">
+                        <Button onClick={handleSave} className="w-full">Save Company Details</Button>
+                    </div>
+                </DashboardCard>
+                <DashboardCard title="Banking Information" icon={<CreditCardIcon className="w-6 h-6"/>}>
+                    <div className="p-6 space-y-4">
+                        <Input label="Bank Name" value={details.bankInfo.bankName} onChange={e => setDetails(d => ({...d, bankInfo: {...d.bankInfo, bankName: e.target.value}}))} />
+                        <Input label="Account Number" value={details.bankInfo.accountNumber} onChange={e => setDetails(d => ({...d, bankInfo: {...d.bankInfo, accountNumber: e.target.value}}))} />
+                        <Input label="Routing Number" value={details.bankInfo.routingNumber} onChange={e => setDetails(d => ({...d, bankInfo: {...d.bankInfo, routingNumber: e.target.value}}))} />
+                    </div>
+                </DashboardCard>
+                <DashboardCard title="Social Links" icon={<SparklesIcon className="w-6 h-6"/>}>
+                    <div className="p-6 space-y-3">
+                        {details.socialLinks.map((link, index) => (
+                            <div key={link.id} className="grid grid-cols-3 gap-2 items-end">
+                                <Input label="Name" placeholder="e.g. Facebook" value={link.name} onChange={e => handleSocialChange(index, 'name', e.target.value)} />
+                                <Input label="URL" placeholder="https://..." value={link.url} onChange={e => handleSocialChange(index, 'url', e.target.value)} />
+                                <div className="flex gap-2">
+                                     <div className="flex-grow">
+                                        <ImageUpload onUpload={base64 => handleSocialChange(index, 'iconUrl', base64)} accept="image/*" />
+                                    </div>
+                                    <Button size="sm" variant="danger" onClick={() => handleRemoveSocial(index)} className="!p-2.5 self-center"><TrashIcon className="w-4 h-4"/></Button>
+                                </div>
+                            </div>
+                        ))}
+                         <Button variant="secondary" onClick={handleAddSocial} className="w-full mt-2"><PlusIcon className="w-4 h-4 mr-2"/>Add Social Link</Button>
+                    </div>
+                </DashboardCard>
+             </div>
+             <div className="lg:col-span-1 space-y-6">
+                <DashboardCard title="Customization" icon={<PencilIcon className="w-6 h-6"/>}>
+                     <div className="p-6 space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1.5">Company Logo</label>
+                            <ImageUpload onUpload={base64 => setDetails(d => ({...d, logoUrl: base64}))} accept="image/*"/>
+                        </div>
+                         <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1.5">Login Screen Background (Image or Video)</label>
+                            <ImageUpload onUpload={base64 => setDetails(d => ({...d, loginBackgroundUrl: base64}))} accept="image/*, video/*"/>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1.5">Login Screen Audio</label>
+                            <ImageUpload onUpload={base64 => setDetails(d => ({...d, loginAudioUrl: base64}))} accept="audio/*"/>
+                        </div>
+                         <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1.5">Player Dashboard Background</label>
+                            <ImageUpload onUpload={base64 => setDetails(d => ({...d, playerDashboardBackgroundUrl: base64}))} accept="image/*"/>
+                        </div>
+                         <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1.5">Admin Dashboard Background</label>
+                            <ImageUpload onUpload={base64 => setDetails(d => ({...d, adminDashboardBackgroundUrl: base64}))} accept="image/*"/>
+                        </div>
+                     </div>
+                </DashboardCard>
+                <DashboardCard title="Mobile App APK" icon={<PhoneIcon className="w-6 h-6"/>}>
+                    <div className="p-6 space-y-4">
+                        <p className="text-sm text-gray-400">
+                            Upload the .APK file for your Android mobile app. Players will be able to download it from the login screen.
+                        </p>
+                        <ImageUpload 
+                            onUpload={base64 => setDetails(d => ({...d, apkUrl: base64}))} 
+                            accept=".apk"
+                        />
+                        {details.apkUrl && (
+                            <div className="text-center bg-zinc-800/50 p-3 rounded-md">
+                                <p className="text-sm text-green-400 font-semibold">APK file is currently uploaded.</p>
+                                <Button 
+                                    variant="danger" 
+                                    size="sm" 
+                                    className="mt-2"
+                                    onClick={() => setDetails(d => ({...d, apkUrl: ''}))}
+                                >
+                                    Remove APK
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                </DashboardCard>
+                <DashboardCard title="Danger Zone" icon={<ExclamationTriangleIcon className="w-6 h-6"/>}>
+                    <div className="p-6 space-y-4">
+                        <p className="text-sm text-gray-400">This will permanently delete all players, events, financial records, and other transactional data. This action cannot be undone.</p>
+                        <Button variant="danger" className="w-full" onClick={() => {
+                            if (confirm('ARE YOU ABSOLUTELY SURE? This will wipe all data except for system settings (ranks, badges, etc). This cannot be undone.')) {
+                                onDeleteAllData();
+                            }
+                        }}>
+                           <TrashIcon className="w-4 h-4 mr-2"/> Delete All Data
+                        </Button>
+                    </div>
+                </DashboardCard>
+             </div>
+        </div>
+    )
+}
+
+const AboutTab: React.FC = () => {
+    return (
+        <DashboardCard title="About Bosjol Tactical Dashboard" icon={<InformationCircleIcon className="w-6 h-6"/>}>
+            <div className="p-6 space-y-8 text-gray-300">
+                <div>
+                    <h2 className="text-2xl font-bold text-red-500">Welcome, Administrator.</h2>
+                    <p className="mt-2 max-w-3xl">
+                        This is the central command hub for Bosjol Tactical. From here, you have complete control over all aspects of the player experience and operational logistics. This dashboard is designed to be a comprehensive, all-in-one tool for managing your airsoft or tactical simulation community. Use this guide to maximize its potential.
+                    </p>
+                </div>
+
+                <div>
+                    <h3 className="text-xl font-bold text-red-400 mb-4 border-b border-zinc-700 pb-2">Getting Started: Your First Mission</h3>
+                    <ol className="space-y-4">
+                        <li className="flex items-start gap-4">
+                            <div className="bg-red-500/20 text-red-400 rounded-full h-8 w-8 flex-shrink-0 flex items-center justify-center font-bold ring-2 ring-red-500/30">1</div>
+                            <div>
+                                <strong className="flex items-center gap-2 text-white">Configure Your Identity <CogIcon className="w-5 h-5" /></strong>
+                                <p className="text-sm">Visit the <strong>Settings</strong> tab to upload your company logo, set background images, and define your standard event rules. This establishes your brand and is the face of your organization.</p>
+                            </div>
+                        </li>
+                        <li className="flex items-start gap-4">
+                            <div className="bg-red-500/20 text-red-400 rounded-full h-8 w-8 flex-shrink-0 flex items-center justify-center font-bold ring-2 ring-red-500/30">2</div>
+                            <div>
+                                <strong className="flex items-center gap-2 text-white">Define Progression <ShieldCheckIcon className="w-5 h-5" /></strong>
+                                <p className="text-sm">Go to the <strong>Progression</strong> tab. Here you can customize the rank structure, create unique badges, and set XP values. A rewarding progression system is key to player retention.</p>
+                            </div>
+                        </li>
+                        <li className="flex items-start gap-4">
+                            <div className="bg-red-500/20 text-red-400 rounded-full h-8 w-8 flex-shrink-0 flex items-center justify-center font-bold ring-2 ring-red-500/30">3</div>
+                            <div>
+                                <strong className="flex items-center gap-2 text-white">Build Your Armory & Logistics <ArchiveBoxIcon className="w-5 h-5" /></strong>
+                                <p className="text-sm">Use the <strong>Inventory</strong>, <strong>Suppliers</strong>, and <strong>Locations</strong> tabs to add rental gear, retail items, vendor details, and game fields.</p>
+                            </div>
+                        </li>
+                        <li className="flex items-start gap-4">
+                            <div className="bg-red-500/20 text-red-400 rounded-full h-8 w-8 flex-shrink-0 flex items-center justify-center font-bold ring-2 ring-red-500/30">4</div>
+                            <div>
+                                <strong className="flex items-center gap-2 text-white">Launch Your First Event <CalendarIcon className="w-5 h-5" /></strong>
+                                <p className="text-sm">With the groundwork laid, head to the <strong>Events</strong> tab to create your first mission. You're ready for action!</p>
+                            </div>
+                        </li>
+                    </ol>
+                </div>
+
+                <div>
+                    <h3 className="text-xl font-bold text-red-400 mb-4 border-b border-zinc-700 pb-2">Core Features Deep Dive</h3>
+                    <div className="space-y-6">
+                        <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700">
+                            <h4 className="flex items-center gap-2 font-bold text-lg text-white mb-2"><CalendarIcon className="w-5 h-5 text-red-400"/> Event Management</h4>
+                            <ul className="list-disc list-inside space-y-2 text-sm pl-2">
+                                <li><strong>Create & Customize:</strong> Design unique events with custom themes, rules, fees, and available rental gear.</li>
+                                <li><strong>Live Management:</strong> On game day, manage attendance, process payments, split players into teams, and track live stats (kills, deaths, headshots) in real-time.</li>
+                                <li><strong>Automated Finalization:</strong> When you finish an event, the system automatically calculates XP based on performance, updates player stats, and generates financial records.</li>
+                                <li className="!mt-3">
+                                    <strong className="text-amber-300">Example in Action:</strong>
+                                    <p className="italic pl-4 border-l-2 border-amber-500/50 ml-2 mt-1">Create a "Zombie Apocalypse" mission. Use the XP Overrides to award double points for headshots. On game day, use the live tracker to add kills. When you finalize, players who attended will automatically rank up and the revenue will appear in your finance ledger.</p>
+                                </li>
+                            </ul>
+                        </div>
+                         <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700">
+                            <h4 className="flex items-center gap-2 font-bold text-lg text-white mb-2"><UsersIcon className="w-5 h-5 text-red-400"/> Player Management</h4>
+                            <ul className="list-disc list-inside space-y-2 text-sm pl-2">
+                                <li><strong>Detailed Profiles:</strong> Access a complete dossier for every operator, including their stats, match history, and personal information.</li>
+                                <li><strong>Manual Adjustments:</strong> Directly award or deduct Rank Points (XP) for actions outside of standard gameplay, like good sportsmanship or rule infractions.</li>
+                                <li><strong>Award Commendations:</strong> Bestow prestigious, manually-awarded Legendary Badges upon players who demonstrate exceptional skill or character.</li>
+                                <li className="!mt-3">
+                                    <strong className="text-amber-300">Example in Action:</strong>
+                                    <p className="italic pl-4 border-l-2 border-amber-500/50 ml-2 mt-1">A player, "Soap", helps a new recruit all day. You go to his profile, award him the "Medal of Valor" and add a 100 XP bonus with the note "For exceptional teamwork and mentorship."</p>
+                                </li>
+                            </ul>
+                        </div>
+                        <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700">
+                            <h4 className="flex items-center gap-2 font-bold text-lg text-white mb-2"><CurrencyDollarIcon className="w-5 h-5 text-red-400"/> Financial Oversight</h4>
+                            <ul className="list-disc list-inside space-y-2 text-sm pl-2">
+                                <li><strong>Comprehensive Ledger:</strong> Automatically tracks all revenue (event fees, rentals, retail) and expenses (inventory purchases).</li>
+                                <li><strong>Powerful Filtering:</strong> Analyze your financial performance by date range, player, event, or location to gain valuable insights.</li>
+                                <li><strong>Visual Dashboards:</strong> View your revenue breakdown with an interactive bar chart to easily identify your most profitable activities.</li>
+                                <li className="!mt-3">
+                                    <strong className="text-amber-300">Example in Action:</strong>
+                                    <p className="italic pl-4 border-l-2 border-amber-500/50 ml-2 mt-1">You want to see which location is more profitable. You filter the dashboard by "Al Mazrah" and "This Month", then compare it to "Verdansk". You discover Verdansk generates more rental revenue, helping you decide where to stock more gear.</p>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 className="text-xl font-bold text-red-400 mb-4 border-b border-zinc-700 pb-2">Admin Best Practices</h3>
+                    <ul className="space-y-3">
+                        <li className="flex items-start gap-3">
+                            <CheckCircleIcon className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5"/>
+                            <div>
+                                <strong className="text-white">Keep It Live</strong>
+                                <p className="text-sm">Use the live stat-tracking feature during games. It makes the event more engaging for players and ensures accurate data for progression.</p>
+                            </div>
+                        </li>
+                        <li className="flex items-start gap-3">
+                            <CheckCircleIcon className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5"/>
+                            <div>
+                                <strong className="text-white">Reward Excellence</strong>
+                                <p className="text-sm">Frequently use manual XP awards and Legendary Badges. Recognizing players for great sportsmanship or a game-changing play builds a positive community culture.</p>
+                            </div>
+                        </li>
+                         <li className="flex items-start gap-3">
+                            <CheckCircleIcon className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5"/>
+                            <div>
+                                <strong className="text-white">Analyze Your Data</strong>
+                                <p className="text-sm">Regularly check the Finance tab. Are certain event themes more profitable? Is a specific piece of rental gear extremely popular? Use these insights to inform your decisions.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div className="pt-4 text-center text-sm text-gray-500 border-t border-zinc-700">
+                    <p>Bosjol Tactical Dashboard v1.3.0</p>
+                    <p>Built for operators, by operators.</p>
+                </div>
+            </div>
+        </DashboardCard>
+    );
+};
+
+
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+    players, setPlayers,
+    events, setEvents,
+    ranks, setRanks,
+    badges, setBadges,
+    legendaryBadges, setLegendaryBadges,
+    gamificationSettings, setGamificationSettings,
+    sponsors, setSponsors,
+    companyDetails, setCompanyDetails,
+    vouchers, setVouchers,
+    inventory, setInventory,
+    suppliers, setSuppliers,
+    transactions, setTransactions,
+    locations, setLocations,
+    raffles, setRaffles,
+    onDeleteAllData
+}) => {
+    const [activeTab, setActiveTab] = useState<Tab>('Events');
+    const [view, setView] = useState<View>('dashboard');
+    const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+    const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
+    const handlePlayerSelect = (id: string) => {
+        setSelectedPlayerId(id);
+        setView('player_profile');
+    };
+
+    const handleManageEvent = (id: string) => {
+        setSelectedEventId(id);
+        setView('manage_event');
+    };
+    
+    const handleUpdatePlayer = (updatedPlayer: Player) => {
+        setPlayers(prev => prev.map(p => p.id === updatedPlayer.id ? updatedPlayer : p));
+    }
+    
+    const handleUpdateVoucher = (updatedVoucher: Voucher) => {
+        setVouchers(prev => prev.map(v => v.id === updatedVoucher.id ? updatedVoucher : v));
+    }
+
+    const handleFinalizeEvent = (finalEvent: GameEvent, finalPlayers: Player[], newTransactions: Transaction[]) => {
+        setEvents(prev => prev.map(e => e.id === finalEvent.id ? finalEvent : e));
+        setPlayers(finalPlayers);
+        setTransactions(prev => [...prev, ...newTransactions]);
+        setView('dashboard');
+    };
+
+    const selectedPlayer = players.find(p => p.id === selectedPlayerId);
+    const selectedEvent = events.find(e => e.id === selectedEventId);
+
+    if (view === 'player_profile' && selectedPlayer) {
+        return <PlayerProfilePage 
+            player={selectedPlayer} 
+            events={events}
+            legendaryBadges={legendaryBadges}
+            onBack={() => setView('dashboard')}
+            onUpdatePlayer={handleUpdatePlayer}
+        />;
+    }
+    
+     if (view === 'manage_event' && selectedEvent) {
+        return <ManageEventPage 
+            event={selectedEvent} 
+            players={players}
+            vouchers={vouchers}
+            inventory={inventory}
+            gamificationSettings={gamificationSettings}
+            onBack={() => setView('dashboard')}
+            onUpdateEvent={(updatedEvent) => setEvents(prev => prev.map(e => e.id === updatedEvent.id ? updatedEvent : e))}
+            onUpdateVoucher={handleUpdateVoucher}
+            onFinalizeEvent={handleFinalizeEvent}
+        />;
+    }
+
+    return (
+        <div className="p-4 sm:p-6 lg:p-8">
+            <Tabs activeTab={activeTab} setActiveTab={setActiveTab} />
+            {activeTab === 'Events' && <EventsTab events={events} setEvents={setEvents} players={players} vouchers={vouchers} setVouchers={setVouchers} setPlayers={setPlayers} gamificationSettings={gamificationSettings} inventory={inventory} companyDetails={companyDetails} setTransactions={setTransactions} onManageEvent={handleManageEvent} />}
+            {activeTab === 'Players' && <PlayersTab players={players} onPlayerSelect={handlePlayerSelect} />}
+            {activeTab === 'Progression' && <ProgressionTab ranks={ranks} setRanks={setRanks} badges={badges} setBadges={setBadges} gamificationSettings={gamificationSettings} setGamificationSettings={setGamificationSettings} legendaryBadges={legendaryBadges} setLegendaryBadges={setLegendaryBadges} setPlayers={setPlayers} />}
+            {activeTab === 'Inventory' && <InventoryTab inventory={inventory} setInventory={setInventory} suppliers={suppliers} />}
+            {activeTab === 'Locations' && <LocationsTab locations={locations} setLocations={setLocations} />}
+            {activeTab === 'Suppliers' && <SuppliersTab suppliers={suppliers} setSuppliers={setSuppliers} />}
+            {activeTab === 'Finance' && <FinanceTab transactions={transactions} players={players} events={events} locations={locations} companyDetails={companyDetails} />}
+            {activeTab === 'Vouchers & Raffles' && <VouchersAndRafflesTab vouchers={vouchers} setVouchers={setVouchers} players={players} events={events} raffles={raffles} setRaffles={setRaffles} />}
+            {activeTab === 'Sponsors' && <SponsorsTab sponsors={sponsors} setSponsors={setSponsors} />}
+            {activeTab === 'Settings' && <SettingsTab companyDetails={companyDetails} setCompanyDetails={setCompanyDetails} onDeleteAllData={onDeleteAllData}/>}
+            {activeTab === 'About' && <AboutTab />}
+        </div>
+    );
+};
